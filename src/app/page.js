@@ -1,69 +1,82 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+import AtlasMap from "@/components/AtlasMap";
+import { getSupabaseClient } from "@/lib/supabase";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+async function getInitialSites() {
+  try {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.from("sites").select("*").order("id", { ascending: true });
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.warn("Could not load initial sites for server render:", err);
+    return [];
+  }
+}
+
+export default async function Home() {
+  const initialSites = await getInitialSites();
+
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>
-            To get started, edit the{" "}
-            <code className={styles.code}>page.js</code> file.
-          </h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="wrap">
+      <header className="top">
+        <div>
+          <p className="brand-eyebrow">Internal &middot; EmPATH Consulting Team</p>
+          <h1>The EmPATH Unit Atlas</h1>
+          <p className="subhead">
+            Our working roster of every hospital-based Emergency Psychiatric Assessment, Treatment &amp; Healing unit
+            tracked so far, plus EmPATH-like units built on a similar model. Filter here, then export a list below to
+            share outside the team.
           </p>
         </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div className="stat-row" id="statRow"></div>
+      </header>
+      <main className="layout">
+        <aside className="panel rail">
+          <div>
+            <h2>Region</h2>
+            <div className="region-toggle" id="regionToggle">
+              <button data-region="us" className="active">United States</button>
+              <button data-region="world">World</button>
+            </div>
+          </div>
+          <div>
+            <h2>Unit type</h2>
+            <div className="chip-group" id="typeChips"></div>
+          </div>
+          <div>
+            <h2>Find a site</h2>
+            <input type="search" id="searchBox" placeholder="Name, city, or state&hellip;" />
+          </div>
+          <button className="reset-link" id="resetBtn">Reset filters</button>
+          <button className="add-unit-btn" id="addUnitBtn">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <path d="M8 2.5v11M2.5 8h11" />
+            </svg>
+            Add a unit
+          </button>
+        </aside>
+        <div className="map-col">
+          <div className="panel map-panel" id="mapPanel"></div>
+          <div className="panel list-panel" id="listPanel"></div>
         </div>
       </main>
+      <footer className="source-note">
+        <span>
+          <strong>Internal use only:</strong> this map reads live from the shared EmPATH Atlas database. Units added
+          here are saved straight to that database and appear for everyone. Use &quot;Export CSV&quot; above to share
+          a filtered list externally, or &quot;Export full list&quot; for the complete master roster.
+        </span>
+        <span>
+          <strong>Snapshot loaded:</strong> {new Date().toISOString().slice(0, 10)} <span id="liveStatus"></span>
+        </span>
+      </footer>
+      <div className="tooltip" id="tooltip"></div>
+      <div className="modal-overlay" id="modalOverlay" hidden>
+        <div className="modal" id="modalPanel"></div>
+      </div>
+      <AtlasMap initialSites={initialSites} />
     </div>
   );
 }
