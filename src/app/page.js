@@ -42,7 +42,7 @@ export default async function Home() {
             </div>
           </div>
           <div>
-            <h2>Unit type</h2>
+            <h2>Site type</h2>
             <div className="chip-group" id="typeChips"></div>
           </div>
           <div>
@@ -54,7 +54,7 @@ export default async function Home() {
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
               <path d="M8 2.5v11M2.5 8h11" />
             </svg>
-            Add a unit
+            Add a site
           </button>
         </aside>
         <div className="map-col">
@@ -64,7 +64,7 @@ export default async function Home() {
       </main>
       <footer className="source-note">
         <span>
-          <strong>Internal use only:</strong> this map reads live from the shared EmPATH Atlas database. Units added
+          <strong>Internal use only:</strong> this map reads live from the shared EmPATH Atlas database. Sites added
           here are saved straight to that database and appear for everyone. Use &quot;Export CSV&quot; above to share
           a filtered list externally, or &quot;Export full list&quot; for the complete master roster.
         </span>

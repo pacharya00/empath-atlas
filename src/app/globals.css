@@ -498,7 +498,7 @@ input[type="search"]::placeholder { color: var(--ink-faint); }
 .field-row.split { flex-direction: row; gap: 10px; }
 .field-row.split > div { flex: 1; display: flex; flex-direction: column; gap: 5px; }
 
-.modal input[type="text"], .modal select, .modal textarea {
+.modal input[type="text"], .modal input[type="password"], .modal select, .modal textarea {
   width: 100%;
   padding: 9px 11px;
   border-radius: 7px;
@@ -552,6 +552,19 @@ input[type="search"]::placeholder { color: var(--ink-faint); }
 }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
 .btn:hover { opacity: 0.88; }
+.btn:disabled { opacity: 0.6; cursor: default; }
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  padding: 20px;
+}
+.login-card { width: 100%; max-width: 380px; }
+.login-card .modal-actions { justify-content: stretch; }
+.login-card .btn.primary { width: 100%; }
 
 .confirm-block textarea {
   width: 100%;

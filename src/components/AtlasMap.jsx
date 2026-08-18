@@ -47,7 +47,10 @@ function siteFromRow(row) {
       const p = worldProject(lon, lat);
       x = +p[0].toFixed(1); y = +p[1].toFixed(1);
     }
-    return { _dbId: row.id, name: row.name || '', country: row.country || '', note: row.note || '', lat, lon, x, y };
+    return {
+      _dbId: row.id, region: 'intl', name: row.name || '', city: row.city || '', country: row.country || '',
+      type: row.type || 'empath', status: row.status || 'live', note: row.note || '', lat, lon, x, y,
+    };
   }
   const hawaii = !!row.hawaii || (row.state || '').toUpperCase() === 'HI';
   let x = null, y = null;
@@ -56,7 +59,7 @@ function siteFromRow(row) {
     x = +p[0].toFixed(1); y = +p[1].toFixed(1);
   }
   return {
-    _dbId: row.id, name: row.name || '', city: row.city || '', state: row.state || '',
+    _dbId: row.id, region: 'us', name: row.name || '', city: row.city || '', state: row.state || '',
     type: row.type || 'empath', status: row.status || 'live', note: row.note || '',
     lat, lon, x, y, hawaii,
   };
@@ -68,10 +71,10 @@ function splitRows(rows) {
   rows.forEach((row) => {
     const region = (row.region || 'us').toLowerCase();
     const site = siteFromRow(row);
+    site._id = 'site-db-' + site._dbId;
     if (region === 'intl') {
       intlSites.push(site);
     } else {
-      site._id = 'site-db-' + site._dbId;
       sites.push(site);
     }
   });
@@ -92,8 +95,14 @@ export default function AtlasMap({ initialSites }) {
       hiPaths: geoData.hiPaths,
       worldPaths: geoData.worldPaths,
       stateCentroids: geoData.stateCentroids,
+      countryCentroids: geoData.countryCentroids,
       ...splitRows(initialSites || []),
     };
+
+    const OTHER_COUNTRIES = geoData.worldPaths
+      .map(p => p.name)
+      .filter(n => n && n !== 'USA')
+      .sort((a, b) => a.localeCompare(b));
 
     const state = {
       region: 'us',
@@ -149,10 +158,11 @@ export default function AtlasMap({ initialSites }) {
     }
 
     function matches(s) {
-      if (!state.types.has(s.type)) return false;
+      if (!s || !state.types.has(s.type)) return false;
       if (state.query) {
         const q = state.query.toLowerCase();
-        const hay = (s.name + ' ' + s.city + ' ' + s.state).toLowerCase();
+        const locality = s.region === 'intl' ? s.country : s.state;
+        const hay = (s.name + ' ' + (s.city || '') + ' ' + (locality || '')).toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -160,14 +170,14 @@ export default function AtlasMap({ initialSites }) {
 
     function renderStats() {
       document.getElementById('statRow').innerHTML = `
-        <div class="stat"><span class="num">${DATA.sites.length}</span><span class="lbl">EmPATH sites</span></div>
-        <div class="stat"><span class="num">${DATA.intlSites.length}</span><span class="lbl">Countries abroad</span></div>
+        <div class="stat"><span class="num">${DATA.sites.length}</span><span class="lbl">U.S. sites</span></div>
+        <div class="stat"><span class="num">${DATA.intlSites.length}</span><span class="lbl">International sites</span></div>
       `;
     }
 
     function renderChips() {
       const typeCounts = { empath: 0, 'empath-like': 0 };
-      DATA.sites.forEach(s => typeCounts[s.type]++);
+      DATA.sites.concat(DATA.intlSites).forEach(s => typeCounts[s.type]++);
       const typeWrap = document.getElementById('typeChips');
       typeWrap.innerHTML = Object.entries(typeMeta).map(([key, m]) => `
         <label class="chip">
@@ -204,13 +214,10 @@ export default function AtlasMap({ initialSites }) {
 
     function buildWorldSvg() {
       const shapes = DATA.worldPaths.map(p => `<path class="world-shape" d="${p.d}"></path>`).join('');
-      const dots = DATA.intlSites.map(s => `
-        <g class="site-mark intl-dot-wrap" data-intl="1" data-name="${escAttr(s.name)}" data-country="${escAttr(s.country)}" data-note="${escAttr(s.note)}" tabindex="0" role="button" aria-label="${escAttr(s.name)}">
-          <circle class="intl-dot" cx="${s.x}" cy="${s.y}" r="6" fill="var(--accent)"></circle>
-        </g>`).join('');
+      const stars = DATA.intlSites.map(s => siteMarkup(s, s.x, s.y)).join('');
       return `<svg viewBox="0 0 960 520" xmlns="http://www.w3.org/2000/svg" aria-label="World map of international EmPATH activity">
         ${shapes}
-        ${dots}
+        ${stars}
       </svg>`;
     }
 
@@ -232,26 +239,19 @@ export default function AtlasMap({ initialSites }) {
       const mapPanel = document.getElementById('mapPanel');
       mapPanel.innerHTML = state.region === 'us' ? buildUsSvg() : buildWorldSvg();
 
-      const legendItems = state.region === 'us'
-        ? `<div class="legend-row"><svg class="legend-star" viewBox="-7 -7 14 14"><path d="${STAR_PATH}" fill="var(--accent)"></path></svg> EmPATH Unit</div>
-           <div class="legend-row"><svg class="legend-star" viewBox="-7 -7 14 14"><path d="${STAR_PATH}" fill="var(--status-prospect)"></path></svg> ${typeMeta['empath-like'].label}</div>`
-        : `<div class="legend-row"><span style="width:11px;height:11px;border-radius:50%;background:var(--accent);display:inline-block"></span> Country with reported unit(s)</div>`;
+      const legendItems = `<div class="legend-row"><svg class="legend-star" viewBox="-7 -7 14 14"><path d="${STAR_PATH}" fill="var(--accent)"></path></svg> EmPATH Unit</div>
+           <div class="legend-row"><svg class="legend-star" viewBox="-7 -7 14 14"><path d="${STAR_PATH}" fill="var(--status-prospect)"></path></svg> ${typeMeta['empath-like'].label}</div>`;
       const legend = document.createElement('div');
       legend.className = 'legend';
       legend.innerHTML = legendItems;
       mapPanel.appendChild(legend);
 
-      if (state.region === 'us') {
-        mapPanel.querySelectorAll('.site-mark').forEach(el => {
-          const site = DATA.sites.find(s => s._id === el.dataset.id);
-          if (!matches(site)) el.classList.add('dimmed');
-          attachSiteEvents(el, site);
-        });
-      } else {
-        mapPanel.querySelectorAll('.site-mark[data-intl]').forEach(el => {
-          attachIntlEvents(el);
-        });
-      }
+      const roster = state.region === 'us' ? DATA.sites : DATA.intlSites;
+      mapPanel.querySelectorAll('.site-mark').forEach(el => {
+        const site = roster.find(s => s._id === el.dataset.id);
+        if (!matches(site)) el.classList.add('dimmed');
+        attachSiteEvents(el, site);
+      });
     }
 
     function attachSiteEvents(el, site) {
@@ -261,7 +261,7 @@ export default function AtlasMap({ initialSites }) {
         el.classList.add('hovered');
         const row = document.querySelector(`tr[data-id="${site._id}"]`);
         if (row) row.classList.add('hovered');
-        tooltip.innerHTML = `<span class="t-name">${site.name}</span><span class="t-meta">${site.city}, ${site.state} &middot; ${typeMeta[site.type].label}</span>${site.note ? `<span class="t-note">${site.note}</span>` : ''}${site.custom ? `<span class="t-note">Just added — saved to the shared roster</span>` : ''}`;
+        tooltip.innerHTML = `<span class="t-name">${site.name}</span><span class="t-meta">${locationLabel(site)} &middot; ${typeMeta[site.type].label}</span>${site.note ? `<span class="t-note">${site.note}</span>` : ''}${site.custom ? `<span class="t-note">Just added — saved to the shared roster</span>` : ''}`;
         positionTooltip(evt, el);
         tooltip.classList.add('visible');
       };
@@ -270,21 +270,6 @@ export default function AtlasMap({ initialSites }) {
         document.querySelectorAll('.list-panel tr.hovered').forEach(n => n.classList.remove('hovered'));
         tooltip.classList.remove('visible');
       };
-      el.addEventListener('mouseenter', show);
-      el.addEventListener('mousemove', (e) => positionTooltip(e, el));
-      el.addEventListener('mouseleave', hide);
-      el.addEventListener('focus', show);
-      el.addEventListener('blur', hide);
-    }
-
-    function attachIntlEvents(el) {
-      const tooltip = document.getElementById('tooltip');
-      const show = (evt) => {
-        tooltip.innerHTML = `<span class="t-name">${el.dataset.name}</span><span class="t-meta">${el.dataset.country}</span><span class="t-note">${el.dataset.note}</span>`;
-        positionTooltip(evt, el);
-        tooltip.classList.add('visible');
-      };
-      const hide = () => tooltip.classList.remove('visible');
       el.addEventListener('mouseenter', show);
       el.addEventListener('mousemove', (e) => positionTooltip(e, el));
       el.addEventListener('mouseleave', hide);
@@ -321,16 +306,31 @@ export default function AtlasMap({ initialSites }) {
       URL.revokeObjectURL(url);
     }
 
+    function sortedRoster() {
+      const roster = state.region === 'us' ? DATA.sites : DATA.intlSites;
+      return roster.filter(matches).sort((a, b) => {
+        const la = a.region === 'intl' ? a.country : a.state;
+        const lb = b.region === 'intl' ? b.country : b.state;
+        return (la || '').localeCompare(lb || '') || a.name.localeCompare(b.name);
+      });
+    }
+
+    function locationLabel(s) {
+      return s.region === 'intl'
+        ? (s.city ? `${s.city}, ${s.country}` : s.country)
+        : `${s.city}, ${s.state}`;
+    }
+
     function exportCurrentList() {
+      const rows = sortedRoster();
       if (state.region !== 'us') {
         downloadCSV(
           'empath-atlas-international.csv',
-          ['Country', 'Notes'],
-          DATA.intlSites.map(s => [s.country, s.note])
+          ['Site', 'City', 'Country', 'Type', 'Notes'],
+          rows.map(s => [s.name, s.city || '', s.country, typeMeta[s.type].label, s.note || ''])
         );
         return;
       }
-      const rows = DATA.sites.filter(matches).sort((a, b) => a.state.localeCompare(b.state) || a.name.localeCompare(b.name));
       downloadCSV(
         'empath-atlas-sites.csv',
         ['Site', 'City', 'State', 'Type', 'Notes'],
@@ -340,13 +340,12 @@ export default function AtlasMap({ initialSites }) {
 
     function renderList() {
       const listPanel = document.getElementById('listPanel');
-      const rows = DATA.sites.filter(matches).sort((a, b) => a.state.localeCompare(b.state) || a.name.localeCompare(b.name));
-      const count = state.region === 'us' ? rows.length : DATA.intlSites.length;
-      const noun = state.region === 'us' ? (count === 1 ? 'site' : 'sites') : (count === 1 ? 'country' : 'countries');
+      const rows = sortedRoster();
+      const noun = rows.length === 1 ? 'site' : 'sites';
 
       listPanel.innerHTML = `
         <div class="list-header">
-          <span class="list-title"><span class="n">${count}</span> ${noun} shown</span>
+          <span class="list-title"><span class="n">${rows.length}</span> ${noun} shown</span>
           <div class="list-actions">
             <button class="export-btn" id="exportBtn">${EXPORT_ICON} Export CSV</button>
             <a class="export-btn" id="exportAllBtn" href="/api/export" download>${EXPORT_ICON} Export full list</a>
@@ -358,16 +357,6 @@ export default function AtlasMap({ initialSites }) {
 
       const listScroll = document.getElementById('listScroll');
 
-      if (state.region !== 'us') {
-        listScroll.innerHTML = `
-          <table>
-            <thead><tr><th>Country</th><th>Notes</th></tr></thead>
-            <tbody>
-              ${DATA.intlSites.map(s => `<tr><td>${s.country}</td><td>${s.note}</td></tr>`).join('')}
-            </tbody>
-          </table>`;
-        return;
-      }
       if (!rows.length) {
         listScroll.innerHTML = `<div class="empty-note">No sites match the current filters.</div>`;
         return;
@@ -379,7 +368,7 @@ export default function AtlasMap({ initialSites }) {
             ${rows.map(s => `
               <tr data-id="${s._id}">
                 <td>${s.name}</td>
-                <td>${s.city}, ${s.state}</td>
+                <td>${locationLabel(s)}</td>
                 <td class="type-tag">${typeMeta[s.type].label}</td>
               </tr>`).join('')}
           </tbody>
@@ -398,14 +387,14 @@ export default function AtlasMap({ initialSites }) {
       });
     }
 
-    // ---------- Add a unit ----------
+    // ---------- Add a site ----------
     function resetDraft() {
-      draft = { name: '', city: '', state: '', type: 'empath', status: 'live', note: '', lat: '', lon: '', x: null, y: null };
+      draft = { name: '', city: '', state: '', region: 'us', country: '', type: 'empath', status: 'live', note: '', lat: '', lon: '', x: null, y: null };
     }
 
     function updateChipCounts() {
       const typeCounts = { empath: 0, 'empath-like': 0 };
-      DATA.sites.forEach(s => typeCounts[s.type]++);
+      DATA.sites.concat(DATA.intlSites).forEach(s => typeCounts[s.type]++);
       document.querySelectorAll('#typeChips .chip').forEach(chip => {
         const val = chip.querySelector('input').value;
         chip.querySelector('.count').textContent = typeCounts[val];
@@ -419,7 +408,8 @@ export default function AtlasMap({ initialSites }) {
     function captureDraftFields() {
       draft.name = document.getElementById('f-name').value.trim();
       draft.city = document.getElementById('f-city').value.trim();
-      draft.state = document.getElementById('f-state').value.trim().toUpperCase();
+      const stateEl = document.getElementById('f-state');
+      if (stateEl) draft.state = stateEl.value.trim().toUpperCase();
       draft.type = document.getElementById('f-type').value;
       draft.note = document.getElementById('f-note').value.trim();
       draft.lat = document.getElementById('f-lat').value.trim();
@@ -428,21 +418,30 @@ export default function AtlasMap({ initialSites }) {
 
     function openFormModal() {
       if (!draft) resetDraft();
-      if (state.region !== 'us') {
-        state.region = 'us';
-        document.querySelectorAll('#regionToggle button').forEach(b => b.classList.toggle('active', b.dataset.region === 'us'));
+      if (state.region !== draft.region) {
+        state.region = draft.region;
+        document.querySelectorAll('#regionToggle button').forEach(b => b.classList.toggle('active', b.dataset.region === draft.region));
         renderMap();
         renderList();
       }
+      const isUs = draft.region === 'us';
+      const countryOptions = `<option value="__US__" ${isUs ? 'selected' : ''}>United States</option>` +
+        OTHER_COUNTRIES.map(c => `<option value="${escAttr(c)}" ${!isUs && draft.country === c ? 'selected' : ''}>${escAttr(c)}</option>`).join('');
+
       modalPanel.innerHTML = `
-        <h3>Add a unit</h3>
-        <p class="modal-sub">This saves straight to the shared roster — everyone who opens this map will see it. New units are placed on the U.S. map.</p>
+        <h3>Add a site</h3>
+        <p class="modal-sub">This saves straight to the shared roster — everyone who opens this map will see it.</p>
         <div class="pin-status" id="pinStatus"></div>
         <form id="addUnitForm">
           <div class="field-row">
-            <label for="f-name">Facility / unit name</label>
+            <label for="f-country">Country</label>
+            <select id="f-country">${countryOptions}</select>
+          </div>
+          <div class="field-row">
+            <label for="f-name">Facility / site name</label>
             <input type="text" id="f-name" required value="${escAttr(draft.name)}">
           </div>
+          ${isUs ? `
           <div class="field-row split">
             <div>
               <label for="f-city">City</label>
@@ -452,9 +451,13 @@ export default function AtlasMap({ initialSites }) {
               <label for="f-state">State</label>
               <input type="text" id="f-state" required maxlength="2" placeholder="e.g. CA" value="${escAttr(draft.state)}">
             </div>
-          </div>
+          </div>` : `
           <div class="field-row">
-            <label for="f-type">Unit type</label>
+            <label for="f-city">City (optional)</label>
+            <input type="text" id="f-city" value="${escAttr(draft.city)}">
+          </div>`}
+          <div class="field-row">
+            <label for="f-type">Site type</label>
             <select id="f-type">
               <option value="empath" ${draft.type === 'empath' ? 'selected' : ''}>${typeMeta.empath.label}</option>
               <option value="empath-like" ${draft.type === 'empath-like' ? 'selected' : ''}>${typeMeta['empath-like'].label}</option>
@@ -485,20 +488,45 @@ export default function AtlasMap({ initialSites }) {
       modalOverlay.hidden = false;
       renderPinStatus();
 
-      document.getElementById('f-state').addEventListener('input', () => {
-        draft.state = document.getElementById('f-state').value.trim().toUpperCase();
-        renderPinStatus();
+      document.getElementById('f-country').addEventListener('change', () => {
+        captureDraftFields();
+        const val = document.getElementById('f-country').value;
+        draft.region = val === '__US__' ? 'us' : 'intl';
+        draft.country = val === '__US__' ? '' : val;
+        draft.x = null;
+        draft.y = null;
+        state.region = draft.region;
+        document.querySelectorAll('#regionToggle button').forEach(b => b.classList.toggle('active', b.dataset.region === draft.region));
+        renderMap();
+        renderList();
+        openFormModal();
       });
+      if (isUs) {
+        document.getElementById('f-state').addEventListener('input', () => {
+          draft.state = document.getElementById('f-state').value.trim().toUpperCase();
+          renderPinStatus();
+        });
+      }
       document.getElementById('cancelModalBtn').addEventListener('click', () => { closeModal(); draft = null; });
       document.getElementById('addUnitForm').addEventListener('submit', onSubmitDraft);
     }
 
-    // A pin is auto-placed at the entered state's centroid unless the user
-    // clicks through to drop it manually — "Add a unit" should never require
-    // a click just to get a star on the map.
+    // A pin is auto-placed at the entered state/country's centroid unless the
+    // user clicks through to drop it manually — "Add a site" should never
+    // require a click just to get a star on the map.
     function pinStatusInfo() {
       if (draft.x != null) {
         return { cls: 'set', text: 'Custom location set on the map.', btn: 'Move pin' };
+      }
+      if (draft.region === 'intl') {
+        const country = draft.country;
+        if (!country) {
+          return { cls: '', text: 'Select a country to auto-place the pin at its center.', btn: 'Place on map instead' };
+        }
+        if (DATA.countryCentroids && DATA.countryCentroids[country]) {
+          return { cls: 'set', text: `Will auto-place at the center of ${country}.`, btn: 'Place more precisely' };
+        }
+        return { cls: 'warn', text: `Can't find "${country}" on the map.`, btn: 'Place it manually' };
       }
       const code = draft.state;
       if (!code) {
@@ -563,11 +591,16 @@ export default function AtlasMap({ initialSites }) {
       return String(s || '').trim().toLowerCase();
     }
 
-    // Same name + state already on the map (roster sites or earlier custom
-    // additions this session) counts as a duplicate; same name in a different
-    // state does not (e.g. multi-state health systems reusing a brand name).
+    // Same name + state (US) or name + country (intl) already on the map
+    // (roster sites or earlier custom additions this session) counts as a
+    // duplicate; same name in a different state/country does not (e.g.
+    // multi-state/multi-country health systems reusing a brand name).
     function findDuplicateSite(draftSite) {
       const name = normalizeForDedupe(draftSite.name);
+      if (draftSite.region === 'intl') {
+        const co = normalizeForDedupe(draftSite.country);
+        return DATA.intlSites.find(s => normalizeForDedupe(s.name) === name && normalizeForDedupe(s.country) === co) || null;
+      }
       const st = normalizeForDedupe(draftSite.state);
       return DATA.sites.find(s => normalizeForDedupe(s.name) === name && normalizeForDedupe(s.state) === st) || null;
     }
@@ -576,28 +609,51 @@ export default function AtlasMap({ initialSites }) {
       e.preventDefault();
       captureDraftFields();
       const errEl = document.getElementById('formError');
-      if (!draft.name || !draft.city || !draft.state) {
-        errEl.textContent = 'Name, city, and state are required.';
-        errEl.style.display = 'block';
-        return;
-      }
-      const dup = findDuplicateSite(draft);
-      if (dup) {
-        errEl.textContent = `"${draft.name}" is already on the map (${dup.city}, ${dup.state}).`;
-        errEl.style.display = 'block';
-        return;
-      }
-      let x = draft.x, y = draft.y, hawaii = false;
-      if (x == null || y == null) {
-        const centroid = DATA.stateCentroids && DATA.stateCentroids[draft.state];
-        if (!centroid) {
-          errEl.textContent = `Can't find "${draft.state}" on the map — check the state code, or use "Place it manually" above.`;
+      const isUs = draft.region === 'us';
+
+      if (isUs) {
+        if (!draft.name || !draft.city || !draft.state) {
+          errEl.textContent = 'Name, city, and state are required.';
           errEl.style.display = 'block';
           return;
         }
-        x = centroid.x;
-        y = centroid.y;
-        hawaii = !!centroid.hawaii;
+      } else if (!draft.name || !draft.country) {
+        errEl.textContent = 'Name and country are required.';
+        errEl.style.display = 'block';
+        return;
+      }
+
+      const dup = findDuplicateSite(draft);
+      if (dup) {
+        errEl.textContent = isUs
+          ? `"${draft.name}" is already on the map (${dup.city}, ${dup.state}).`
+          : `"${draft.name}" is already on the map (${locationLabel(dup)}).`;
+        errEl.style.display = 'block';
+        return;
+      }
+
+      let x = draft.x, y = draft.y, hawaii = false;
+      if (x == null || y == null) {
+        if (isUs) {
+          const centroid = DATA.stateCentroids && DATA.stateCentroids[draft.state];
+          if (!centroid) {
+            errEl.textContent = `Can't find "${draft.state}" on the map — check the state code, or use "Place it manually" above.`;
+            errEl.style.display = 'block';
+            return;
+          }
+          x = centroid.x;
+          y = centroid.y;
+          hawaii = !!centroid.hawaii;
+        } else {
+          const centroid = DATA.countryCentroids && DATA.countryCentroids[draft.country];
+          if (!centroid) {
+            errEl.textContent = `Can't find "${draft.country}" on the map — use "Place it manually" above.`;
+            errEl.style.display = 'block';
+            return;
+          }
+          x = centroid.x;
+          y = centroid.y;
+        }
       }
       errEl.style.display = 'none';
       let latNum = draft.lat !== '' && !isNaN(parseFloat(draft.lat)) ? parseFloat(draft.lat) : null;
@@ -606,7 +662,8 @@ export default function AtlasMap({ initialSites }) {
         // No coordinates typed in — back them out of the auto-placed pin so
         // the saved row still carries a lat/lon and lands in the same spot
         // next time anyone loads the map.
-        const inv = (hawaii ? hiProject : usProject).invert(x, y);
+        const projector = isUs ? (hawaii ? hiProject : usProject) : worldProject;
+        const inv = projector.invert(x, y);
         if (lonNum == null) lonNum = +inv[0].toFixed(4);
         if (latNum == null) latNum = +inv[1].toFixed(4);
       }
@@ -615,19 +672,18 @@ export default function AtlasMap({ initialSites }) {
       submitBtn.disabled = true;
       submitBtn.textContent = 'Saving…';
       try {
-        const created = await saveSite({
-          name: draft.name,
-          city: draft.city,
-          state: draft.state,
-          type: draft.type,
-          note: draft.note,
-          lat: latNum,
-          lon: lonNum,
-        });
+        const payload = isUs
+          ? { region: 'us', name: draft.name, city: draft.city, state: draft.state, type: draft.type, note: draft.note, lat: latNum, lon: lonNum }
+          : { region: 'intl', name: draft.name, city: draft.city, country: draft.country, type: draft.type, note: draft.note, lat: latNum, lon: lonNum };
+        const created = await saveSite(payload);
         const newSite = siteFromRow(created);
         newSite._id = 'site-db-' + newSite._dbId;
         newSite.custom = true;
-        DATA.sites.push(newSite);
+        if (newSite.region === 'intl') {
+          DATA.intlSites.push(newSite);
+        } else {
+          DATA.sites.push(newSite);
+        }
 
         renderStats();
         updateChipCounts();
@@ -636,7 +692,7 @@ export default function AtlasMap({ initialSites }) {
         draft = null;
         openConfirmModal(newSite);
       } catch (err) {
-        console.warn('Failed to save unit', err);
+        console.warn('Failed to save site', err);
         errEl.textContent = "Couldn't save to the shared roster — check your connection and try again. Your entries above are still filled in.";
         errEl.style.display = 'block';
       } finally {
@@ -659,8 +715,8 @@ export default function AtlasMap({ initialSites }) {
 
     function openConfirmModal(site) {
       const summary = [
-        `Unit: ${site.name}`,
-        `Location: ${site.city}, ${site.state}`,
+        `Site: ${site.name}`,
+        `Location: ${locationLabel(site)}`,
         `Type: ${typeMeta[site.type].label}`,
         site.note ? `Note: ${site.note}` : null,
       ].filter(Boolean).join('\n');

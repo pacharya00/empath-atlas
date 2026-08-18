@@ -142,13 +142,21 @@ for (const f of usStates.features) {
 // ---------- World panel ----------
 const worldProject = makeProjector(-170, 190, -56, 78, 960, 520, 10);
 let worldPaths = [];
+let countryCentroids = {};
 for (const f of world.features) {
   const d = geomToPath(f.geometry, worldProject);
   if (d) worldPaths.push({ name: f.properties.name || '', d });
+  const name = f.properties.name;
+  const centroid = geometryCentroid(f.geometry);
+  if (name && centroid) {
+    const [x, y] = worldProject(centroid.x, centroid.y);
+    countryCentroids[name] = { x: +x.toFixed(1), y: +y.toFixed(1) };
+  }
 }
 
-const out = { usPaths, hiPaths, worldPaths, stateCentroids };
+const out = { usPaths, hiPaths, worldPaths, stateCentroids, countryCentroids };
 const outPath = path.join(root, 'src/data/geo-data.json');
 fs.writeFileSync(outPath, JSON.stringify(out));
 console.log('US state paths:', usPaths.length, 'HI paths:', hiPaths.length, 'World paths:', worldPaths.length);
+console.log('Country centroids:', Object.keys(countryCentroids).length);
 console.log('geo-data.json size (bytes):', fs.statSync(outPath).size);

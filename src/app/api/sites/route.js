@@ -12,35 +12,40 @@ export async function GET() {
 
 export async function POST(request) {
   const body = await request.json();
+  const region = body.region === 'intl' ? 'intl' : 'us';
   const name = String(body.name || '').trim();
   const city = String(body.city || '').trim();
-  const state = String(body.state || '').trim().toUpperCase();
   const type = body.type === 'empath-like' ? 'empath-like' : 'empath';
   const note = String(body.note || '').trim();
   const lat = body.lat != null && body.lat !== '' && !isNaN(parseFloat(body.lat)) ? parseFloat(body.lat) : null;
   const lon = body.lon != null && body.lon !== '' && !isNaN(parseFloat(body.lon)) ? parseFloat(body.lon) : null;
-  const hawaii = state === 'HI';
 
-  if (!name || !city || !state) {
-    return NextResponse.json({ error: 'Name, city, and state are required.' }, { status: 400 });
+  const insert = { region, name, type, status: 'live', note, lat, lon, approx: false };
+
+  if (region === 'intl') {
+    const country = String(body.country || '').trim();
+    if (!name || !country) {
+      return NextResponse.json({ error: 'Name and country are required.' }, { status: 400 });
+    }
+    insert.country = country;
+    insert.city = city || null;
+    insert.state = null;
+    insert.hawaii = false;
+  } else {
+    const state = String(body.state || '').trim().toUpperCase();
+    if (!name || !city || !state) {
+      return NextResponse.json({ error: 'Name, city, and state are required.' }, { status: 400 });
+    }
+    insert.city = city;
+    insert.state = state;
+    insert.hawaii = state === 'HI';
+    insert.country = null;
   }
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('sites')
-    .insert({
-      region: 'us',
-      name,
-      city,
-      state,
-      type,
-      status: 'live',
-      note,
-      lat,
-      lon,
-      hawaii,
-      approx: false,
-    })
+    .insert(insert)
     .select()
     .single();
 
