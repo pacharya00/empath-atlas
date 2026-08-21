@@ -111,6 +111,7 @@ export default function AtlasMap({ initialSites }) {
     const state = {
       region: 'us',
       types: new Set(['empath', 'empath-like']),
+      showInDev: true,
       query: '',
       hoveredId: null,
     };
@@ -173,6 +174,7 @@ export default function AtlasMap({ initialSites }) {
 
     function matches(s) {
       if (!s || !state.types.has(s.type)) return false;
+      if (s.status === 'in-development' && !state.showInDev) return false;
       if (state.query) {
         const q = state.query.toLowerCase();
         const locality = s.region === 'intl' ? s.country : s.state;
@@ -191,7 +193,11 @@ export default function AtlasMap({ initialSites }) {
 
     function renderChips() {
       const typeCounts = { empath: 0, 'empath-like': 0 };
-      DATA.sites.concat(DATA.intlSites).forEach(s => typeCounts[s.type]++);
+      let inDevCount = 0;
+      DATA.sites.concat(DATA.intlSites).forEach(s => {
+        typeCounts[s.type]++;
+        if (s.status === 'in-development') inDevCount++;
+      });
       const typeWrap = document.getElementById('typeChips');
       typeWrap.innerHTML = Object.entries(typeMeta).map(([key, m]) => `
         <label class="chip">
@@ -200,14 +206,26 @@ export default function AtlasMap({ initialSites }) {
           ${m.label}
           <span class="count">${typeCounts[key]}</span>
         </label>
-      `).join('');
+      `).join('') + `
+        <label class="chip">
+          <input type="checkbox" data-kind="status" value="in-development" ${state.showInDev ? 'checked' : ''}>
+          <span class="swatch" style="background:var(--status-dev)"></span>
+          In development
+          <span class="count">${inDevCount}</span>
+        </label>
+      `;
 
-      document.querySelectorAll('input[data-kind]').forEach(el => {
+      document.querySelectorAll('input[data-kind="type"]').forEach(el => {
         el.addEventListener('change', () => {
           if (el.checked) state.types.add(el.value); else state.types.delete(el.value);
           renderMap();
           renderList();
         });
+      });
+      document.querySelector('input[data-kind="status"]').addEventListener('change', (e) => {
+        state.showInDev = e.target.checked;
+        renderMap();
+        renderList();
       });
     }
 
@@ -436,10 +454,15 @@ export default function AtlasMap({ initialSites }) {
 
     function updateChipCounts() {
       const typeCounts = { empath: 0, 'empath-like': 0 };
-      DATA.sites.concat(DATA.intlSites).forEach(s => typeCounts[s.type]++);
+      let inDevCount = 0;
+      DATA.sites.concat(DATA.intlSites).forEach(s => {
+        typeCounts[s.type]++;
+        if (s.status === 'in-development') inDevCount++;
+      });
       document.querySelectorAll('#typeChips .chip').forEach(chip => {
-        const val = chip.querySelector('input').value;
-        chip.querySelector('.count').textContent = typeCounts[val];
+        const input = chip.querySelector('input');
+        const count = input.dataset.kind === 'status' ? inDevCount : typeCounts[input.value];
+        chip.querySelector('.count').textContent = count;
       });
     }
 
@@ -812,6 +835,7 @@ export default function AtlasMap({ initialSites }) {
 
     document.getElementById('resetBtn').addEventListener('click', () => {
       state.types = new Set(['empath', 'empath-like']);
+      state.showInDev = true;
       state.query = '';
       document.getElementById('searchBox').value = '';
       document.querySelectorAll('input[data-kind]').forEach(el => el.checked = true);
