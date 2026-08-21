@@ -35,6 +35,7 @@ function makeProjector(lonMin, lonMax, latMin, latMax, width, height, padding) {
 }
 const usProject = makeProjector(-125, -66.5, 24, 49.5, 960, 600, 10);
 const hiProject = makeProjector(-160.5, -154.5, 18.7, 22.5, 150, 110, 8);
+const akProject = makeProjector(-190, -129, 51, 72, 170, 70, 6);
 const worldProject = makeProjector(-170, 190, -56, 78, 960, 520, 10);
 
 function siteFromRow(row) {
@@ -53,15 +54,17 @@ function siteFromRow(row) {
     };
   }
   const hawaii = !!row.hawaii || (row.state || '').toUpperCase() === 'HI';
+  const alaska = (row.state || '').toUpperCase() === 'AK';
   let x = null, y = null;
   if (lat != null && lon != null) {
-    const p = (hawaii ? hiProject : usProject)(lon, lat);
+    const projector = hawaii ? hiProject : alaska ? akProject : usProject;
+    const p = projector(lon, lat);
     x = +p[0].toFixed(1); y = +p[1].toFixed(1);
   }
   return {
     _dbId: row.id, region: 'us', name: row.name || '', city: row.city || '', state: row.state || '',
     type: row.type || 'empath', status: row.status || 'live', note: row.note || '',
-    lat, lon, x, y, hawaii,
+    lat, lon, x, y, hawaii, alaska,
   };
 }
 
@@ -93,6 +96,7 @@ export default function AtlasMap({ initialSites }) {
     const DATA = {
       usPaths: geoData.usPaths,
       hiPaths: geoData.hiPaths,
+      akPaths: geoData.akPaths,
       worldPaths: geoData.worldPaths,
       stateCentroids: geoData.stateCentroids,
       countryCentroids: geoData.countryCentroids,
@@ -210,17 +214,21 @@ export default function AtlasMap({ initialSites }) {
     function buildUsSvg() {
       const stateShapes = DATA.usPaths.map(p => `<path class="state-shape" d="${p.d}"></path>`).join('');
       const hiShapes = DATA.hiPaths.map(p => `<path class="state-shape" d="${p.d}" transform="translate(790,470)"></path>`).join('');
-      const stars = DATA.sites.filter(s => !s.hawaii).map(s => siteMarkup(s, s.x, s.y)).join('');
+      const akShapes = DATA.akPaths.map(p => `<path class="state-shape" d="${p.d}" transform="translate(10,480)"></path>`).join('');
+      const stars = DATA.sites.filter(s => !s.hawaii && !s.alaska).map(s => siteMarkup(s, s.x, s.y)).join('');
       const hiStars = DATA.sites.filter(s => s.hawaii).map(s => siteMarkup(s, s.x + 790, s.y + 470)).join('');
+      const akStars = DATA.sites.filter(s => s.alaska).map(s => siteMarkup(s, s.x + 10, s.y + 480)).join('');
       return `<svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" aria-label="Map of the United States">
         <rect class="hi-box" x="786" y="466" width="158" height="118" rx="6"></rect>
         <text x="795" y="480" font-size="10" fill="var(--ink-faint)" font-family="Public Sans">Hawai&#8216;i</text>
-        <rect class="hi-box" x="20" y="486" width="150" height="100" rx="6"></rect>
-        <text x="29" y="500" font-size="10" fill="var(--ink-faint)" font-family="Public Sans">Alaska</text>
+        <rect class="hi-box" x="10" y="480" width="170" height="70" rx="6"></rect>
+        <text x="19" y="494" font-size="10" fill="var(--ink-faint)" font-family="Public Sans">Alaska</text>
         ${stateShapes}
         ${hiShapes}
+        ${akShapes}
         ${stars}
         ${hiStars}
+        ${akStars}
       </svg>`;
     }
 
@@ -674,7 +682,7 @@ export default function AtlasMap({ initialSites }) {
         return;
       }
 
-      let x = draft.x, y = draft.y, hawaii = false;
+      let x = draft.x, y = draft.y, hawaii = false, alaska = false;
       if (x == null || y == null) {
         if (isUs) {
           const centroid = DATA.stateCentroids && DATA.stateCentroids[draft.state];
@@ -686,6 +694,7 @@ export default function AtlasMap({ initialSites }) {
           x = centroid.x;
           y = centroid.y;
           hawaii = !!centroid.hawaii;
+          alaska = !!centroid.alaska;
         } else {
           const centroid = DATA.countryCentroids && DATA.countryCentroids[draft.country];
           if (!centroid) {
@@ -704,7 +713,7 @@ export default function AtlasMap({ initialSites }) {
         // No coordinates typed in — back them out of the auto-placed pin so
         // the saved row still carries a lat/lon and lands in the same spot
         // next time anyone loads the map.
-        const projector = isUs ? (hawaii ? hiProject : usProject) : worldProject;
+        const projector = isUs ? (hawaii ? hiProject : alaska ? akProject : usProject) : worldProject;
         const inv = projector.invert(x, y);
         if (lonNum == null) lonNum = +inv[0].toFixed(4);
         if (latNum == null) latNum = +inv[1].toFixed(4);

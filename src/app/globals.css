@@ -373,7 +373,7 @@ input[type="search"]::placeholder { color: var(--ink-faint); }
 .legend {
   position: absolute;
   right: 18px;
-  bottom: 14px;
+  top: 14px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;

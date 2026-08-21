@@ -57,6 +57,7 @@ function geomToPath(geometry, project) {
 // ---------- US panel ----------
 const usProject = makeProjector(-125, -66.5, 24, 49.5, 960, 600, 10);
 const hiProject = makeProjector(-160.5, -154.5, 18.7, 22.5, 150, 110, 8);
+const akProject = makeProjector(-190, -129, 51, 72, 170, 70, 6);
 
 const CONTIGUOUS_EXCLUDE = new Set(['Alaska', 'Hawaii', 'Puerto Rico']);
 
@@ -116,6 +117,7 @@ function geometryCentroid(geometry) {
 
 let usPaths = [];
 let hiPaths = [];
+let akPaths = [];
 let stateCentroids = {};
 for (const f of usStates.features) {
   const name = f.properties.name;
@@ -127,6 +129,15 @@ for (const f of usStates.features) {
     if (centroid && abbr) {
       const [x, y] = hiProject(centroid.x, centroid.y);
       stateCentroids[abbr] = { x: +x.toFixed(1), y: +y.toFixed(1), hawaii: true };
+    }
+    continue;
+  }
+  if (name === 'Alaska') {
+    const d = geomToPath(f.geometry, akProject);
+    if (d) akPaths.push({ name, d });
+    if (centroid && abbr) {
+      const [x, y] = akProject(centroid.x, centroid.y);
+      stateCentroids[abbr] = { x: +x.toFixed(1), y: +y.toFixed(1), alaska: true };
     }
     continue;
   }
@@ -154,9 +165,9 @@ for (const f of world.features) {
   }
 }
 
-const out = { usPaths, hiPaths, worldPaths, stateCentroids, countryCentroids };
+const out = { usPaths, hiPaths, akPaths, worldPaths, stateCentroids, countryCentroids };
 const outPath = path.join(root, 'src/data/geo-data.json');
 fs.writeFileSync(outPath, JSON.stringify(out));
-console.log('US state paths:', usPaths.length, 'HI paths:', hiPaths.length, 'World paths:', worldPaths.length);
+console.log('US state paths:', usPaths.length, 'HI paths:', hiPaths.length, 'AK paths:', akPaths.length, 'World paths:', worldPaths.length);
 console.log('Country centroids:', Object.keys(countryCentroids).length);
 console.log('geo-data.json size (bytes):', fs.statSync(outPath).size);
