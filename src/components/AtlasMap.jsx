@@ -173,8 +173,12 @@ export default function AtlasMap({ initialSites }) {
     }
 
     function matches(s) {
-      if (!s || !state.types.has(s.type)) return false;
-      if (s.status === 'in-development' && !state.showInDev) return false;
+      if (!s) return false;
+      if (s.status === 'in-development') {
+        if (!state.showInDev) return false;
+      } else if (!state.types.has(s.type)) {
+        return false;
+      }
       if (state.query) {
         const q = state.query.toLowerCase();
         const locality = s.region === 'intl' ? s.country : s.state;
