@@ -215,6 +215,8 @@ export default function AtlasMap({ initialSites }) {
       return `<svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" aria-label="Map of the United States">
         <rect class="hi-box" x="786" y="466" width="158" height="118" rx="6"></rect>
         <text x="795" y="480" font-size="10" fill="var(--ink-faint)" font-family="Public Sans">Hawai&#8216;i</text>
+        <rect class="hi-box" x="20" y="486" width="150" height="100" rx="6"></rect>
+        <text x="29" y="500" font-size="10" fill="var(--ink-faint)" font-family="Public Sans">Alaska</text>
         ${stateShapes}
         ${hiShapes}
         ${stars}
