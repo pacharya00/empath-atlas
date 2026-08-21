@@ -497,6 +497,18 @@ input[type="search"]::placeholder { color: var(--ink-faint); }
 }
 .field-row.split { flex-direction: row; gap: 10px; }
 .field-row.split > div { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+.field-row.checkbox-row { flex-direction: row; align-items: center; }
+.field-row.checkbox-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--ink);
+}
+.field-row.checkbox-row input[type="checkbox"] { accent-color: var(--status-dev); width: 15px; height: 15px; }
 
 .modal input[type="text"], .modal input[type="password"], .modal select, .modal textarea {
   width: 100%;
@@ -696,6 +708,36 @@ input[type="search"]::placeholder { color: var(--ink-faint); }
   font-size: 10.5px;
   color: var(--ink-faint);
 }
+
+.status-cell { display: flex; align-items: center; gap: 8px; }
+
+.status-tag {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10.5px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.status-tag.dev { color: var(--status-dev); background: var(--status-dev-soft); }
+.status-tag.live { color: var(--status-live); }
+
+.promote-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--status-dev);
+  background: var(--surface);
+  color: var(--status-dev);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.promote-btn:hover { background: var(--status-dev); color: var(--surface); }
+.promote-btn:disabled { opacity: 0.6; cursor: default; }
 
 .empty-note {
   padding: 22px;

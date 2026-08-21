@@ -144,6 +144,15 @@ export default function AtlasMap({ initialSites }) {
       return json.site;
     }
 
+    async function promoteSite(site) {
+      const res = await fetch(`/api/sites/${site._dbId}`, { method: 'PATCH' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || `Request failed (${res.status})`);
+      site.status = 'live';
+      renderMap();
+      renderList();
+    }
+
     function setLiveStatus(ok) {
       const el = document.getElementById('liveStatus');
       if (!el) return;
@@ -154,6 +163,7 @@ export default function AtlasMap({ initialSites }) {
     }
 
     function siteColor(s) {
+      if (s.status === 'in-development') return 'var(--status-dev)';
       return s.type === 'empath' ? 'var(--accent)' : 'var(--status-prospect)';
     }
 
@@ -240,7 +250,8 @@ export default function AtlasMap({ initialSites }) {
       mapPanel.innerHTML = state.region === 'us' ? buildUsSvg() : buildWorldSvg();
 
       const legendItems = `<div class="legend-row"><svg class="legend-star" viewBox="-7 -7 14 14"><path d="${STAR_PATH}" fill="var(--accent)"></path></svg> EmPATH Unit</div>
-           <div class="legend-row"><svg class="legend-star" viewBox="-7 -7 14 14"><path d="${STAR_PATH}" fill="var(--status-prospect)"></path></svg> ${typeMeta['empath-like'].label}</div>`;
+           <div class="legend-row"><svg class="legend-star" viewBox="-7 -7 14 14"><path d="${STAR_PATH}" fill="var(--status-prospect)"></path></svg> ${typeMeta['empath-like'].label}</div>
+           <div class="legend-row"><svg class="legend-star" viewBox="-7 -7 14 14"><path d="${STAR_PATH}" fill="var(--status-dev)"></path></svg> In development</div>`;
       const legend = document.createElement('div');
       legend.className = 'legend';
       legend.innerHTML = legendItems;
@@ -261,7 +272,7 @@ export default function AtlasMap({ initialSites }) {
         el.classList.add('hovered');
         const row = document.querySelector(`tr[data-id="${site._id}"]`);
         if (row) row.classList.add('hovered');
-        tooltip.innerHTML = `<span class="t-name">${site.name}</span><span class="t-meta">${locationLabel(site)} &middot; ${typeMeta[site.type].label}</span>${site.note ? `<span class="t-note">${site.note}</span>` : ''}${site.custom ? `<span class="t-note">Just added — saved to the shared roster</span>` : ''}`;
+        tooltip.innerHTML = `<span class="t-name">${site.name}</span><span class="t-meta">${locationLabel(site)} &middot; ${typeMeta[site.type].label}</span>${site.status === 'in-development' ? `<span class="t-note">In development</span>` : ''}${site.note ? `<span class="t-note">${site.note}</span>` : ''}${site.custom ? `<span class="t-note">Just added — saved to the shared roster</span>` : ''}`;
         positionTooltip(evt, el);
         tooltip.classList.add('visible');
       };
@@ -363,13 +374,16 @@ export default function AtlasMap({ initialSites }) {
       }
       listScroll.innerHTML = `
         <table>
-          <thead><tr><th>Site</th><th>Location</th><th>Type</th></tr></thead>
+          <thead><tr><th>Site</th><th>Location</th><th>Type</th><th>Status</th></tr></thead>
           <tbody>
             ${rows.map(s => `
               <tr data-id="${s._id}">
                 <td>${s.name}</td>
                 <td>${locationLabel(s)}</td>
                 <td class="type-tag">${typeMeta[s.type].label}</td>
+                <td class="status-cell">${s.status === 'in-development'
+                  ? `<span class="status-tag dev">In development</span><button type="button" class="promote-btn" data-id="${s._id}" title="Mark as live">&#10003; Mark live</button>`
+                  : `<span class="status-tag live">Live</span>`}</td>
               </tr>`).join('')}
           </tbody>
         </table>`;
@@ -383,6 +397,24 @@ export default function AtlasMap({ initialSites }) {
         tr.addEventListener('mouseleave', () => {
           const mark = document.querySelector(`.site-mark[data-id="${tr.dataset.id}"]`);
           if (mark) mark.classList.remove('hovered');
+        });
+      });
+
+      listScroll.querySelectorAll('.promote-btn').forEach(btn => {
+        btn.addEventListener('click', async (evt) => {
+          evt.stopPropagation();
+          const roster = state.region === 'us' ? DATA.sites : DATA.intlSites;
+          const site = roster.find(s => s._id === btn.dataset.id);
+          if (!site) return;
+          btn.disabled = true;
+          btn.textContent = 'Marking live…';
+          try {
+            await promoteSite(site);
+          } catch (err) {
+            console.warn('Failed to mark site live', err);
+            btn.disabled = false;
+            btn.textContent = '✓ Mark live';
+          }
         });
       });
     }
@@ -411,6 +443,8 @@ export default function AtlasMap({ initialSites }) {
       const stateEl = document.getElementById('f-state');
       if (stateEl) draft.state = stateEl.value.trim().toUpperCase();
       draft.type = document.getElementById('f-type').value;
+      const inDevEl = document.getElementById('f-in-dev');
+      draft.status = inDevEl && inDevEl.checked ? 'in-development' : 'live';
       draft.note = document.getElementById('f-note').value.trim();
       draft.lat = document.getElementById('f-lat').value.trim();
       draft.lon = document.getElementById('f-lon').value.trim();
@@ -463,6 +497,9 @@ export default function AtlasMap({ initialSites }) {
               <option value="empath-like" ${draft.type === 'empath-like' ? 'selected' : ''}>${typeMeta['empath-like'].label}</option>
             </select>
           </div>
+          <div class="field-row checkbox-row">
+            <label><input type="checkbox" id="f-in-dev" ${draft.status === 'in-development' ? 'checked' : ''}> This site is still in development</label>
+          </div>
           <div class="field-row split">
             <div>
               <label for="f-lat">Latitude (optional)</label>
@@ -507,6 +544,9 @@ export default function AtlasMap({ initialSites }) {
           renderPinStatus();
         });
       }
+      document.getElementById('f-in-dev').addEventListener('change', () => {
+        draft.status = document.getElementById('f-in-dev').checked ? 'in-development' : 'live';
+      });
       document.getElementById('cancelModalBtn').addEventListener('click', () => { closeModal(); draft = null; });
       document.getElementById('addUnitForm').addEventListener('submit', onSubmitDraft);
     }
@@ -673,8 +713,8 @@ export default function AtlasMap({ initialSites }) {
       submitBtn.textContent = 'Saving…';
       try {
         const payload = isUs
-          ? { region: 'us', name: draft.name, city: draft.city, state: draft.state, type: draft.type, note: draft.note, lat: latNum, lon: lonNum }
-          : { region: 'intl', name: draft.name, city: draft.city, country: draft.country, type: draft.type, note: draft.note, lat: latNum, lon: lonNum };
+          ? { region: 'us', name: draft.name, city: draft.city, state: draft.state, type: draft.type, status: draft.status, note: draft.note, lat: latNum, lon: lonNum }
+          : { region: 'intl', name: draft.name, city: draft.city, country: draft.country, type: draft.type, status: draft.status, note: draft.note, lat: latNum, lon: lonNum };
         const created = await saveSite(payload);
         const newSite = siteFromRow(created);
         newSite._id = 'site-db-' + newSite._dbId;

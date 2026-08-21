@@ -16,11 +16,12 @@ export async function POST(request) {
   const name = String(body.name || '').trim();
   const city = String(body.city || '').trim();
   const type = body.type === 'empath-like' ? 'empath-like' : 'empath';
+  const status = body.status === 'in-development' ? 'in-development' : 'live';
   const note = String(body.note || '').trim();
   const lat = body.lat != null && body.lat !== '' && !isNaN(parseFloat(body.lat)) ? parseFloat(body.lat) : null;
   const lon = body.lon != null && body.lon !== '' && !isNaN(parseFloat(body.lon)) ? parseFloat(body.lon) : null;
 
-  const insert = { region, name, type, status: 'live', note, lat, lon, approx: false };
+  const insert = { region, name, type, status, note, lat, lon, approx: false };
 
   if (region === 'intl') {
     const country = String(body.country || '').trim();
