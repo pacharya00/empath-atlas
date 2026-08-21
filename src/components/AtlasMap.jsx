@@ -233,13 +233,55 @@ export default function AtlasMap({ initialSites }) {
       });
     }
 
+    // Sites plotted from real lat/lon often land on top of each other (same
+    // city, or just close together at map scale). Group markers within
+    // minDist px via union-find so a whole chain of near-duplicates ends up
+    // in one cluster, then spread each cluster's members evenly around their
+    // shared centroid so every star stays visible and clickable. Returns new
+    // {..., x, y} objects — never mutates the site objects in DATA.
+    function declutter(items, minDist = 9) {
+      const n = items.length;
+      const parent = Array.from({ length: n }, (_, i) => i);
+      function find(i) { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; }
+      function union(a, b) { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; }
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+          const dx = items[i].x - items[j].x, dy = items[i].y - items[j].y;
+          if (Math.sqrt(dx * dx + dy * dy) < minDist) union(i, j);
+        }
+      }
+      const groups = new Map();
+      for (let i = 0; i < n; i++) {
+        const r = find(i);
+        if (!groups.has(r)) groups.set(r, []);
+        groups.get(r).push(i);
+      }
+      const out = items.map(it => ({ ...it }));
+      for (const idxs of groups.values()) {
+        if (idxs.length === 1) continue;
+        idxs.sort((a, b) => String(items[a]._id).localeCompare(String(items[b]._id)));
+        const cx = idxs.reduce((s, i) => s + items[i].x, 0) / idxs.length;
+        const cy = idxs.reduce((s, i) => s + items[i].y, 0) / idxs.length;
+        const radius = minDist * 0.62 * Math.min(1 + idxs.length * 0.12, 2.2);
+        idxs.forEach((i, k) => {
+          const angle = (2 * Math.PI * k) / idxs.length - Math.PI / 2;
+          out[i].x = +(cx + radius * Math.cos(angle)).toFixed(1);
+          out[i].y = +(cy + radius * Math.sin(angle)).toFixed(1);
+        });
+      }
+      return out;
+    }
+
     function buildUsSvg() {
       const stateShapes = DATA.usPaths.map(p => `<path class="state-shape" d="${p.d}"></path>`).join('');
       const hiShapes = DATA.hiPaths.map(p => `<path class="state-shape" d="${p.d}" transform="translate(790,470)"></path>`).join('');
       const akShapes = DATA.akPaths.map(p => `<path class="state-shape" d="${p.d}" transform="translate(10,480)"></path>`).join('');
-      const stars = DATA.sites.filter(s => !s.hawaii && !s.alaska).map(s => siteMarkup(s, s.x, s.y)).join('');
-      const hiStars = DATA.sites.filter(s => s.hawaii).map(s => siteMarkup(s, s.x + 790, s.y + 470)).join('');
-      const akStars = DATA.sites.filter(s => s.alaska).map(s => siteMarkup(s, s.x + 10, s.y + 480)).join('');
+      const mainland = declutter(DATA.sites.filter(s => !s.hawaii && !s.alaska));
+      const hi = declutter(DATA.sites.filter(s => s.hawaii));
+      const ak = declutter(DATA.sites.filter(s => s.alaska));
+      const stars = mainland.map(s => siteMarkup(s, s.x, s.y)).join('');
+      const hiStars = hi.map(s => siteMarkup(s, s.x + 790, s.y + 470)).join('');
+      const akStars = ak.map(s => siteMarkup(s, s.x + 10, s.y + 480)).join('');
       return `<svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg" aria-label="Map of the United States">
         <rect class="hi-box" x="786" y="466" width="158" height="118" rx="6"></rect>
         <text x="795" y="480" font-size="10" fill="var(--ink-faint)" font-family="Public Sans">Hawai&#8216;i</text>
@@ -256,7 +298,7 @@ export default function AtlasMap({ initialSites }) {
 
     function buildWorldSvg() {
       const shapes = DATA.worldPaths.map(p => `<path class="world-shape" d="${p.d}"></path>`).join('');
-      const stars = DATA.intlSites.map(s => siteMarkup(s, s.x, s.y)).join('');
+      const stars = declutter(DATA.intlSites).map(s => siteMarkup(s, s.x, s.y)).join('');
       return `<svg viewBox="0 0 960 520" xmlns="http://www.w3.org/2000/svg" aria-label="World map of international EmPATH activity">
         ${shapes}
         ${stars}
@@ -266,7 +308,7 @@ export default function AtlasMap({ initialSites }) {
     function siteMarkup(s, x, y) {
       const color = siteColor(s);
       const customRing = s.custom ? `<circle class="custom-ring" r="9.5"></circle>` : '';
-      return `<g class="site-mark${s.custom ? ' custom' : ''}" data-id="${s._id}" transform="translate(${x},${y})" tabindex="0" role="button" aria-label="${escAttr(s.name)}">
+      return `<g class="site-mark${s.custom ? ' custom' : ''}" data-id="${s._id}" transform="translate(${x},${y}) scale(0.82)" tabindex="0" role="button" aria-label="${escAttr(s.name)}">
         <circle class="halo" r="10" stroke="${color}"></circle>
         ${customRing}
         <path class="star" d="${STAR_PATH}" fill="${color}"></path>
