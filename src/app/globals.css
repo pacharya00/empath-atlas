@@ -709,7 +709,8 @@ input[type="search"]::placeholder { color: var(--ink-faint); }
   color: var(--ink-faint);
 }
 
-.status-cell { display: flex; align-items: center; gap: 8px; }
+.status-cell { white-space: nowrap; }
+.status-inner { display: inline-flex; align-items: center; gap: 8px; }
 
 .status-tag {
   font-family: 'IBM Plex Mono', monospace;

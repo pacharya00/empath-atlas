@@ -460,9 +460,9 @@ export default function AtlasMap({ initialSites }) {
                 <td>${s.name}</td>
                 <td>${locationLabel(s)}</td>
                 <td class="type-tag">${typeMeta[s.type].label}</td>
-                <td class="status-cell">${s.status === 'in-development'
+                <td class="status-cell"><span class="status-inner">${s.status === 'in-development'
                   ? `<span class="status-tag dev">In development</span><button type="button" class="promote-btn" data-id="${s._id}" title="Mark as live">&#10003; Mark live</button>`
-                  : `<span class="status-tag live">Live</span>`}</td>
+                  : `<span class="status-tag live">Live</span>`}</span></td>
               </tr>`).join('')}
           </tbody>
         </table>`;
