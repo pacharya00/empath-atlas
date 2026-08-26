@@ -1,3 +1,4 @@
+import Image from "next/image";
 import AtlasMap from "@/components/AtlasMap";
 import { getSupabaseClient } from "@/lib/supabase";
 
@@ -22,6 +23,22 @@ export default async function Home() {
     <div className="wrap">
       <header className="top">
         <div>
+          <a
+            href="https://empathunits.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="brand-logo-link"
+            aria-label="EmPATH Consulting website"
+          >
+            <Image
+              src="/empath-logo.png"
+              alt="EmPATH Consulting"
+              width={446}
+              height={142}
+              className="brand-logo"
+              priority
+            />
+          </a>
           <p className="brand-eyebrow">Internal &middot; EmPATH Consulting Team</p>
           <h1>The EmPATH Unit Atlas</h1>
           <p className="subhead">

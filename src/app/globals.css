@@ -96,6 +96,23 @@ header.top {
   padding-bottom: 18px;
 }
 
+.brand-logo-link {
+  display: inline-block;
+  margin: 0 0 10px;
+}
+
+.brand-logo {
+  display: block;
+  height: 28px;
+  width: auto;
+  opacity: 0.92;
+  transition: opacity 0.15s ease;
+}
+
+.brand-logo-link:hover .brand-logo {
+  opacity: 1;
+}
+
 .brand-eyebrow {
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 11.5px;
