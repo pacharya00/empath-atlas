@@ -189,9 +189,14 @@ export default function AtlasMap({ initialSites }) {
     }
 
     function renderStats() {
+      const isEmpath = s => s.type === 'empath';
+      const usCount = DATA.sites.filter(isEmpath).length;
+      const intlCount = DATA.intlSites.filter(isEmpath).length;
+      const inDevCount = DATA.sites.concat(DATA.intlSites).filter(s => isEmpath(s) && s.status === 'in-development').length;
       document.getElementById('statRow').innerHTML = `
-        <div class="stat"><span class="num">${DATA.sites.length}</span><span class="lbl">U.S. sites</span></div>
-        <div class="stat"><span class="num">${DATA.intlSites.length}</span><span class="lbl">International sites</span></div>
+        <div class="stat"><span class="num">${usCount}</span><span class="lbl">U.S. sites</span></div>
+        <div class="stat"><span class="num">${intlCount}</span><span class="lbl">International sites</span></div>
+        <div class="stat"><span class="num">${inDevCount}</span><span class="lbl">In development</span></div>
       `;
     }
 
