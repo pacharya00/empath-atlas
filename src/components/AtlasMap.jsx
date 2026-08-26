@@ -203,7 +203,8 @@ export default function AtlasMap({ initialSites }) {
     function renderChips() {
       const typeCounts = { empath: 0, 'empath-like': 0 };
       let inDevCount = 0;
-      DATA.sites.concat(DATA.intlSites).forEach(s => {
+      const roster = state.region === 'us' ? DATA.sites : DATA.intlSites;
+      roster.forEach(s => {
         typeCounts[s.type]++;
         if (s.status === 'in-development') inDevCount++;
       });
@@ -457,7 +458,7 @@ export default function AtlasMap({ initialSites }) {
           <tbody>
             ${rows.map(s => `
               <tr data-id="${s._id}">
-                <td>${s.name}</td>
+                <td title="${escAttr(s.name)}">${s.name}</td>
                 <td>${locationLabel(s)}</td>
                 <td class="type-tag">${typeMeta[s.type].label}</td>
                 <td class="status-cell"><span class="status-inner">${s.status === 'in-development'
@@ -506,7 +507,8 @@ export default function AtlasMap({ initialSites }) {
     function updateChipCounts() {
       const typeCounts = { empath: 0, 'empath-like': 0 };
       let inDevCount = 0;
-      DATA.sites.concat(DATA.intlSites).forEach(s => {
+      const roster = state.region === 'us' ? DATA.sites : DATA.intlSites;
+      roster.forEach(s => {
         typeCounts[s.type]++;
         if (s.status === 'in-development') inDevCount++;
       });
@@ -874,6 +876,7 @@ export default function AtlasMap({ initialSites }) {
       if (!btn) return;
       state.region = btn.dataset.region;
       document.querySelectorAll('#regionToggle button').forEach(b => b.classList.toggle('active', b === btn));
+      updateChipCounts();
       renderMap();
       renderList();
     });

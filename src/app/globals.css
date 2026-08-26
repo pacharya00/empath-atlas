@@ -693,6 +693,13 @@ input[type="search"]::placeholder { color: var(--ink-faint); }
   color: var(--ink);
 }
 
+.list-panel tbody td:first-child {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .list-panel tbody tr {
   cursor: pointer;
   transition: background 0.12s ease;
