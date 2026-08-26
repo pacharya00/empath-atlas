@@ -399,11 +399,7 @@ export default function AtlasMap({ initialSites }) {
 
     function sortedRoster() {
       const roster = state.region === 'us' ? DATA.sites : DATA.intlSites;
-      return roster.filter(matches).sort((a, b) => {
-        const la = a.region === 'intl' ? a.country : a.state;
-        const lb = b.region === 'intl' ? b.country : b.state;
-        return (la || '').localeCompare(lb || '') || a.name.localeCompare(b.name);
-      });
+      return roster.filter(matches).sort((a, b) => a.name.localeCompare(b.name));
     }
 
     function locationLabel(s) {
