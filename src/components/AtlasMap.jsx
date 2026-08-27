@@ -397,9 +397,13 @@ export default function AtlasMap({ initialSites }) {
       URL.revokeObjectURL(url);
     }
 
+    function sortKey(name) {
+      return name.replace(/^\((?:Adult|Adolescent|Pediatric) Unit\)\s*/, '');
+    }
+
     function sortedRoster() {
       const roster = state.region === 'us' ? DATA.sites : DATA.intlSites;
-      return roster.filter(matches).sort((a, b) => a.name.localeCompare(b.name));
+      return roster.filter(matches).sort((a, b) => sortKey(a.name).localeCompare(sortKey(b.name)));
     }
 
     function locationLabel(s) {
