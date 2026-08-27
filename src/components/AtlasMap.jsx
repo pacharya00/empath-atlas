@@ -38,6 +38,36 @@ const hiProject = makeProjector(-160.5, -154.5, 18.7, 22.5, 150, 110, 8);
 const akProject = makeProjector(-190, -129, 51, 72, 170, 70, 6);
 const worldProject = makeProjector(-170, 190, -56, 78, 960, 520, 10);
 
+// Parses an SVG path's "M x,y L x,y ... Z" subpaths into point rings for
+// ray-casting containment tests (state shapes only ever use M/L/Z).
+function parsePathRings(d) {
+  const rings = [];
+  let current = [];
+  const tokens = d.match(/[MLZ][^MLZ]*/gi) || [];
+  for (const tok of tokens) {
+    const cmd = tok[0].toUpperCase();
+    if (cmd === 'Z') {
+      if (current.length) rings.push(current);
+      current = [];
+    } else {
+      const nums = tok.slice(1).trim().split(/[\s,]+/).map(Number).filter((v) => !Number.isNaN(v));
+      for (let i = 0; i + 1 < nums.length; i += 2) current.push([nums[i], nums[i + 1]]);
+    }
+  }
+  if (current.length) rings.push(current);
+  return rings;
+}
+
+function pointInRing(x, y, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+    const intersect = ((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
 function siteFromRow(row) {
   const region = (row.region || 'us').toLowerCase();
   const lat = row.lat != null && row.lat !== '' ? parseFloat(row.lat) : null;
@@ -102,6 +132,8 @@ export default function AtlasMap({ initialSites }) {
       countryCentroids: geoData.countryCentroids,
       ...splitRows(initialSites || []),
     };
+
+    const usMainlandRings = DATA.usPaths.flatMap(p => parsePathRings(p.d));
 
     const OTHER_COUNTRIES = geoData.worldPaths
       .map(p => p.name)
@@ -244,8 +276,15 @@ export default function AtlasMap({ initialSites }) {
     // minDist px via union-find so a whole chain of near-duplicates ends up
     // in one cluster, then spread each cluster's members evenly around their
     // shared centroid so every star stays visible and clickable. Returns new
-    // {..., x, y} objects — never mutates the site objects in DATA.
-    function declutter(items, minDist = 9) {
+    // {..., x, y} objects — never mutates the site objects in DATA. Dense
+    // clusters near a coastline/border (e.g. the LA basin, Charleston) can
+    // have the spread push a point past the drawn shape into open water —
+    // when insideTest is given, it's checked against the marker's full visual
+    // footprint (not just its center), and the spread radius is shrunk in
+    // steps toward the cluster centroid until a step passes, since the
+    // centroid (an average of several real, on-land points) is far more
+    // likely to be safely inland than any single original coastal point.
+    function declutter(items, minDist = 9, insideTest = null) {
       const n = items.length;
       const parent = Array.from({ length: n }, (_, i) => i);
       function find(i) { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; }
@@ -271,8 +310,22 @@ export default function AtlasMap({ initialSites }) {
         const radius = minDist * 0.62 * Math.min(1 + idxs.length * 0.12, 2.2);
         idxs.forEach((i, k) => {
           const angle = (2 * Math.PI * k) / idxs.length - Math.PI / 2;
-          out[i].x = +(cx + radius * Math.cos(angle)).toFixed(1);
-          out[i].y = +(cy + radius * Math.sin(angle)).toFixed(1);
+          if (!insideTest) {
+            out[i].x = +(cx + radius * Math.cos(angle)).toFixed(1);
+            out[i].y = +(cy + radius * Math.sin(angle)).toFixed(1);
+            return;
+          }
+          for (const frac of [1, 0.75, 0.5, 0.25, 0]) {
+            const nx = +(cx + radius * frac * Math.cos(angle)).toFixed(1);
+            const ny = +(cy + radius * frac * Math.sin(angle)).toFixed(1);
+            if (insideTest(nx, ny)) {
+              out[i].x = nx;
+              out[i].y = ny;
+              return;
+            }
+          }
+          // Nothing along the centroid ray cleared the footprint test — leave
+          // this marker at its original (pre-spread) position as last resort.
         });
       }
       return out;
@@ -282,7 +335,42 @@ export default function AtlasMap({ initialSites }) {
       const stateShapes = DATA.usPaths.map(p => `<path class="state-shape" d="${p.d}"></path>`).join('');
       const hiShapes = DATA.hiPaths.map(p => `<path class="state-shape" d="${p.d}" transform="translate(790,470)"></path>`).join('');
       const akShapes = DATA.akPaths.map(p => `<path class="state-shape" d="${p.d}" transform="translate(10,480)"></path>`).join('');
-      const mainland = declutter(DATA.sites.filter(s => !s.hawaii && !s.alaska));
+      const pointOnMainland = (x, y) => usMainlandRings.some(ring => pointInRing(x, y, ring));
+      // Marker halo is r=10 scaled by 0.82 -> ~8.2px rendered radius. A center
+      // point can pass a bare point-in-polygon test while the star's visual
+      // edge still crosses the (simplified) coastline, so check a ring of
+      // points at that radius too — the marker only counts as "on the
+      // mainland" if its whole visible footprint is.
+      const MARKER_VISUAL_R = 8.2;
+      const onUsMainland = (x, y) => {
+        if (!pointOnMainland(x, y)) return false;
+        for (let a = 0; a < 8; a++) {
+          const angle = (a / 8) * 2 * Math.PI;
+          const ex = x + MARKER_VISUAL_R * Math.cos(angle);
+          const ey = y + MARKER_VISUAL_R * Math.sin(angle);
+          if (!pointOnMainland(ex, ey)) return false;
+        }
+        return true;
+      };
+      const mainlandRaw = declutter(DATA.sites.filter(s => !s.hawaii && !s.alaska), 9, onUsMainland);
+      // Some real, correctly-geocoded coastal sites (or a cluster's centroid)
+      // still fail the footprint test above — the simplified coastline shape
+      // just doesn't have enough detail to hold every marker without help.
+      // Nudge any straggler a few px at a time toward a point deep inside the
+      // mainland (Wichita, KS) until its footprint clears the shape.
+      const [interiorX, interiorY] = usProject(-97.34, 37.69);
+      const mainland = mainlandRaw.map(s => {
+        if (onUsMainland(s.x, s.y)) return s;
+        const dx = interiorX - s.x, dy = interiorY - s.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const ux = dx / dist, uy = dy / dist;
+        for (const step of [1, 2, 4, 8, 16, 24, 32, 48]) {
+          const nx = +(s.x + ux * step).toFixed(1);
+          const ny = +(s.y + uy * step).toFixed(1);
+          if (onUsMainland(nx, ny)) return { ...s, x: nx, y: ny };
+        }
+        return s;
+      });
       const hi = declutter(DATA.sites.filter(s => s.hawaii));
       const ak = declutter(DATA.sites.filter(s => s.alaska));
       const stars = mainland.map(s => siteMarkup(s, s.x, s.y)).join('');
