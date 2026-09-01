@@ -114,14 +114,15 @@ function splitRows(rows) {
   return { sites, intlSites };
 }
 
-export default function AtlasMap({ initialSites }) {
+export default function AtlasMap({ initialSites, readOnly = false, sitesEndpoint = '/api/sites' }) {
   useEffect(() => {
-    const addUnitBtn = document.getElementById('addUnitBtn');
-    if (!addUnitBtn || addUnitBtn.dataset.wired) return;
-    addUnitBtn.dataset.wired = '1';
+    const mapPanel = document.getElementById('mapPanel');
+    if (!mapPanel || mapPanel.dataset.wired) return;
+    mapPanel.dataset.wired = '1';
 
-    const modalOverlay = document.getElementById('modalOverlay');
-    const modalPanel = document.getElementById('modalPanel');
+    const addUnitBtn = !readOnly ? document.getElementById('addUnitBtn') : null;
+    const modalOverlay = !readOnly ? document.getElementById('modalOverlay') : null;
+    const modalPanel = !readOnly ? document.getElementById('modalPanel') : null;
 
     const DATA = {
       usPaths: geoData.usPaths,
@@ -153,7 +154,7 @@ export default function AtlasMap({ initialSites }) {
     // ---------- Data source (Supabase via our own API routes) ----------
     async function loadSites() {
       try {
-        const res = await fetch('/api/sites');
+        const res = await fetch(sitesEndpoint);
         if (!res.ok) throw new Error(`Request failed (${res.status})`);
         const json = await res.json();
         const { sites, intlSites } = splitRows(json.sites || []);
@@ -221,11 +222,13 @@ export default function AtlasMap({ initialSites }) {
     }
 
     function renderStats() {
+      const statRow = document.getElementById('statRow');
+      if (!statRow) return;
       const isEmpath = s => s.type === 'empath';
       const usCount = DATA.sites.filter(isEmpath).length;
       const intlCount = DATA.intlSites.filter(isEmpath).length;
       const inDevCount = DATA.sites.concat(DATA.intlSites).filter(s => isEmpath(s) && s.status === 'in-development').length;
-      document.getElementById('statRow').innerHTML = `
+      statRow.innerHTML = `
         <div class="stat"><span class="num">${usCount}</span><span class="lbl">U.S. sites</span></div>
         <div class="stat"><span class="num">${intlCount}</span><span class="lbl">International sites</span></div>
         <div class="stat"><span class="num">${inDevCount}</span><span class="lbl">In development</span></div>
@@ -519,6 +522,7 @@ export default function AtlasMap({ initialSites }) {
 
     function renderList() {
       const listPanel = document.getElementById('listPanel');
+      if (!listPanel) return;
       const rows = sortedRoster();
       const noun = rows.length === 1 ? 'site' : 'sites';
 
@@ -550,7 +554,9 @@ export default function AtlasMap({ initialSites }) {
                 <td>${locationLabel(s)}</td>
                 <td class="type-tag">${typeMeta[s.type].label}</td>
                 <td class="status-cell"><span class="status-inner">${s.status === 'in-development'
-                  ? `<span class="status-tag dev">In development</span><button type="button" class="promote-btn" data-id="${s._id}" title="Mark as live">&#10003; Mark live</button>`
+                  ? (readOnly
+                      ? `<span class="status-tag dev">In development</span>`
+                      : `<span class="status-tag dev">In development</span><button type="button" class="promote-btn" data-id="${s._id}" title="Mark as live">&#10003; Mark live</button>`)
                   : `<span class="status-tag live">Live</span>`}</span></td>
               </tr>`).join('')}
           </tbody>
@@ -608,7 +614,7 @@ export default function AtlasMap({ initialSites }) {
     }
 
     function closeModal() {
-      modalOverlay.hidden = true;
+      if (modalOverlay) modalOverlay.hidden = true;
     }
 
     function captureDraftFields() {
@@ -954,10 +960,13 @@ export default function AtlasMap({ initialSites }) {
       });
     }
 
-    addUnitBtn.addEventListener('click', () => { resetDraft(); openFormModal(); });
-    modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
-    const onKeyDown = (e) => { if (e.key === 'Escape' && !modalOverlay.hidden) closeModal(); };
-    document.addEventListener('keydown', onKeyDown);
+    let onKeyDown = null;
+    if (addUnitBtn && modalOverlay) {
+      addUnitBtn.addEventListener('click', () => { resetDraft(); openFormModal(); });
+      modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
+      onKeyDown = (e) => { if (e.key === 'Escape' && !modalOverlay.hidden) closeModal(); };
+      document.addEventListener('keydown', onKeyDown);
+    }
 
     document.getElementById('regionToggle').addEventListener('click', (e) => {
       const btn = e.target.closest('button');
@@ -992,9 +1001,9 @@ export default function AtlasMap({ initialSites }) {
     loadSites();
 
     return () => {
-      document.removeEventListener('keydown', onKeyDown);
+      if (onKeyDown) document.removeEventListener('keydown', onKeyDown);
     };
-  }, [initialSites]);
+  }, [initialSites, readOnly, sitesEndpoint]);
 
   return null;
 }
